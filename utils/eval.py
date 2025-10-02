@@ -6,6 +6,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+# --- MODIFICATION: Import new metrics from sklearn ---
+from sklearn.metrics import (accuracy_score, average_precision_score,
+                           f1_score, precision_score, recall_score)
+
 from utils.config import CONFIGCLASS
 from utils.utils import to_cuda
 
@@ -35,32 +39,39 @@ def get_val_cfg(cfg: CONFIGCLASS, split="val", copy=True):
     return val_cfg
 
 def validate(model: nn.Module, cfg: CONFIGCLASS):
-    from sklearn.metrics import accuracy_score, average_precision_score, roc_auc_score
-
     from utils.datasets import create_dataloader
 
     data_loader = create_dataloader(cfg)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     with torch.no_grad():
-        y_true, y_pred = [], []
+        y_true, y_pred_scores = [], []
         for data in data_loader:
             img, label, meta = data if len(data) == 3 else (*data, None)
             in_tens = to_cuda(img, device)
             meta = to_cuda(meta, device)
             predict = model(in_tens, meta).sigmoid()
-            y_pred.extend(predict.flatten().tolist())
+            y_pred_scores.extend(predict.flatten().tolist())
             y_true.extend(label.flatten().tolist())
 
-    y_true, y_pred = np.array(y_true), np.array(y_pred)
-    r_acc = accuracy_score(y_true[y_true == 0], y_pred[y_true == 0] > 0.5)
-    f_acc = accuracy_score(y_true[y_true == 1], y_pred[y_true == 1] > 0.5)
-    acc = accuracy_score(y_true, y_pred > 0.5)
-    ap = average_precision_score(y_true, y_pred)
+    y_true = np.array(y_true)
+    y_pred_scores = np.array(y_pred_scores)
+    # Convert probabilities to binary predictions (0 or 1) for metrics like F1, Precision, etc.
+    y_pred_binary = y_pred_scores > 0.5
+
+    # --- MODIFICATION: Calculate new metrics ---
+    acc = accuracy_score(y_true, y_pred_binary)
+    ap = average_precision_score(y_true, y_pred_scores)
+    precision = precision_score(y_true, y_pred_binary)
+    recall = recall_score(y_true, y_pred_binary)
+    f1 = f1_score(y_true, y_pred_binary)
+    
+    # --- MODIFICATION: Add new metrics to the results dictionary ---
     results = {
         "ACC": acc,
         "AP": ap,
-        "R_ACC": r_acc,
-        "F_ACC": f_acc,
+        "Precision": precision,
+        "Recall": recall,
+        "F1_Score": f1,
     }
     return results
