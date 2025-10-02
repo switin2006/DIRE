@@ -1,9 +1,27 @@
 ## set MODEL_PATH, num_samples, has_subfolder, images_dir, recons_dir, dire_dir
-export CUDA_VISIBLE_DEVICES=3,4,6,7
-export NCCL_P2P_DISABLE=1
-MODEL_PATH="models/256x256_diffusion_uncond.pt" # "models/lsun_bedroom.pt, models/256x256_diffusion_uncond.pt"
+%%writefile run_compute_dire.sh
+#!/bin/bash
+MODEL_PATH="/content/cifar10_uncond_50M_500K.pt"
+CIFAKE_DATASET_ROOT="/content/cifake_subset"
+OUTPUT_ROOT="/content/generated_DIRE"
+export CUDA_VISIBLE_DEVICES=0
 
-SAMPLE_FLAGS="--batch_size 16 --num_samples 1000  --timestep_respacing ddim20 --use_ddim True"
-SAVE_FLAGS="--images_dir /data2/wangzd/dataset/DiffusionForensics/images/test/imagenet/sdv1 --recons_dir /data2/wangzd/dataset/DiffusionForensics/recons_test/sdv1 --dire_dir /data2/wangzd/dataset/DiffusionForensics/dire_test/sdv1"
-MODEL_FLAGS="--attention_resolutions 32,16,8 --class_cond False --diffusion_steps 1000 --dropout 0.1 --image_size 256 --learn_sigma True --noise_schedule linear --num_channels 256 --num_head_channels 64 --num_res_blocks 2 --resblock_updown True --use_fp16 True --use_scale_shift_norm True"
-mpiexec -n 4 python compute_dire.py --model_path $MODEL_PATH $MODEL_FLAGS  $SAVE_FLAGS $SAMPLE_FLAGS --has_subfolder True
+MODEL_FLAGS="--image_size 32 --num_channels 128 --num_res_blocks 3 --learn_sigma True --dropout 0.3 --class_cond False --attention_resolutions 16,8 --diffusion_steps 4000 --noise_schedule cosine"
+SAMPLE_FLAGS="--batch_size 64 --num_samples -1 --timestep_respacing ddim20 --use_ddim True"
+
+for split in train test; do
+    for type in REAL FAKE; do
+        IMAGES_DIR="$CIFAKE_DATASET_ROOT/$split/$type"
+        RECONS_DIR="$OUTPUT_ROOT/$split/$type/recons"
+        DIRE_DIR="$OUTPUT_ROOT/$split/$type/dire"
+
+        mkdir -p "$RECONS_DIR" "$DIRE_DIR"
+
+        SAVE_FLAGS="--images_dir $IMAGES_DIR --recons_dir $RECONS_DIR --dire_dir $DIRE_DIR --has_subfolder False" # has_subfolder is False here
+
+        echo "--- PROCESSING: $IMAGES_DIR ---"
+        python /content/DIRE/guided-diffusion/compute_dire.py \
+            --model_path "$MODEL_PATH" $MODEL_FLAGS $SAMPLE_FLAGS $SAVE_FLAGS
+    done
+done
+echo "✅ STAGE 1 COMPLETE: DIRE computation finished."
