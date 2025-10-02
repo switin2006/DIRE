@@ -154,6 +154,8 @@ def create_model(
             channel_mult = (1, 1, 2, 3, 4)
         elif image_size == 64:
             channel_mult = (1, 2, 3, 4)
+        elif image_size == 32: # <<< --- THIS IS THE ADDED SECTION --- >>>
+            channel_mult = (1, 2, 2, 2)
         else:
             raise ValueError(f"unsupported image size: {image_size}")
     else:
